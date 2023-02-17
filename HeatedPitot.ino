@@ -14,6 +14,9 @@
 #define MAX6675_CS  8
 #define MAX6675_CLK 11
 
+//Thermocouple max read speed (ms)
+#define MAX6675_TIME 250
+
 //Heater switch FET on pin9, lo -- off ??
 #define HEATER_PIN 9
 
@@ -37,6 +40,9 @@ DallasTemperature sensors(&oneWire);
 //Thermocouple library init
 MAX6675 thermocouple(MAX6675_CLK, MAX6675_CS, MAX6675_DO);
 
+//Thermocouple last read time
+unsigned long last_thermocouple_read;
+
 //Init pid controller library
 PIDController pid;
 
@@ -57,6 +63,8 @@ void setup()
 {
     // Open USB serial port for debug and UI
     Serial.begin(115200);
+
+    // wait for MAX6675 chip to stabilize
     delay(500);
 
     debug("System start\r\n");
@@ -133,12 +141,13 @@ void loop()
     if (g.ambient_offset == 0) target_temp = g.target_temp;
     else target_temp = ambient_temp + g.ambient_offset;
 
-
-    probe_temp = thermocouple.readCelsius(); // Read the Temperature using the readCelsius methode from MAX6675 Library.
-
-
-    debug("Probe:%i\r\n", (long)probe_temp);
+    if ((millis() - last_thermocouple_read) >= MAX6675_TIME)
+    {
+        probe_temp = (double)thermocouple.readCelsius(); // Read the Temperature using the readCelsius method from MAX6675 Library.
+        last_thermocouple_read = millis();
+    }
     
+    debug("Probe: %i\r\n", (long)probe_temp);
 
     int output = pid.compute(probe_temp);    // Let the PID compute the value, returns the optimal output
     analogWrite(HEATER_PIN, output);           // Write the output to the output pin
